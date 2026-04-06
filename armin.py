@@ -4,7 +4,6 @@ import asyncio
 import time
 from dotenv import load_dotenv
 import os
-from server import keep_alive
 load_dotenv(r"C:\Users\Daniel\Desktop\Danny\armin.bot\.env")
 
 # ======= PRÉFIXE =======
@@ -86,5 +85,4 @@ async def main():
         await bot.load_extension("cogs.tickets")
         await bot.start(TOKEN)
 
-keep_alive()
 asyncio.run(main())
