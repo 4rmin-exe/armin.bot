@@ -5,3 +5,4 @@ aiohttp
 openai
 pymongo
 python-dotenv
+flasck
