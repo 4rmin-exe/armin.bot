@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+app/git add .
+*.json
+ffmpeg-2026-04-01-git-eedf8f0165-full_build/
