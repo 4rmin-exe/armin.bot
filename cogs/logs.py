@@ -2,6 +2,17 @@ import discord
 from discord.ext import commands
 from database import get_logs, set_log
 
+LOGS_CONFIG = [
+    ("messages", "📁 logs・messages"),
+    ("membres", "📁 logs・membres"),
+    ("vocal", "📁 logs・vocal"),
+    ("moderation", "📁 logs・moderation"),
+    ("salons", "📁 logs・salons"),
+    ("roles", "📁 logs・roles"),
+    ("boosts", "📁 logs・boosts"),
+    ("tickets", "📁 logs・tickets"),
+]
+
 class Logs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -14,6 +25,52 @@ class Logs(commands.Cog):
         salon = guild.get_channel(salon_id)
         if salon:
             await salon.send(embed=embed)
+
+    @commands.command(extras={"category": "Permissions & Logs"})
+    async def autosetlog(self, ctx):
+        perms_cog = self.bot.get_cog("Permissions")
+        if not perms_cog or ctx.author.id not in perms_cog.owner_ids:
+            await ctx.send("Tu n'as pas la permission.")
+            return
+
+        msg = await ctx.send("⚙️ Création des salons de logs en cours...")
+
+        # Crée la catégorie
+        categorie_discord = discord.utils.get(ctx.guild.categories, name="📋・logs")
+        if not categorie_discord:
+            categorie_discord = await ctx.guild.create_category(
+                "📋・logs",
+                overwrites={
+                    ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False)
+                }
+            )
+
+        # Crée chaque salon et le configure
+        for cle, nom_salon in LOGS_CONFIG:
+            salon_existant = discord.utils.get(categorie_discord.text_channels, name=nom_salon)
+            if not salon_existant:
+                salon = await ctx.guild.create_text_channel(
+                    name=nom_salon,
+                    category=categorie_discord,
+                    overwrites={
+                        ctx.guild.default_role: discord.PermissionOverwrite(view_channel=False)
+                    }
+                )
+            else:
+                salon = salon_existant
+            set_log(str(ctx.guild.id), cle, salon.id)
+
+        embed = discord.Embed(
+            title="✅ Logs configurés",
+            description=f"Catégorie **📋・logs** créée avec {len(LOGS_CONFIG)} salons.",
+            color=0x00ff00
+        )
+        embed.add_field(
+            name="Salons créés",
+            value="\n".join([f"• {nom}" for _, nom in LOGS_CONFIG]),
+            inline=False
+        )
+        await msg.edit(content=None, embed=embed)
 
     @commands.command(extras={"category": "Permissions & Logs"})
     async def setlog(self, ctx, categorie: str = None, salon: discord.TextChannel = None):
