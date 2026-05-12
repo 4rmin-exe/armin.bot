@@ -167,32 +167,9 @@ class Tickets(commands.Cog):
         if not perms_cog or ctx.author.id not in perms_cog.owner_ids:
             await ctx.send("Tu n'as pas la permission.")
             return
-
-        categories_tickets = [c for c in ctx.guild.categories if c.name.startswith("Tickets —")]
-        if not categories_tickets:
-            await ctx.send("Aucun ticket ouvert.")
-            return
-
-        total = sum(len(c.text_channels) for c in categories_tickets)
-        if total == 0:
-            await ctx.send("Aucun ticket ouvert.")
-            return
-
-        await ctx.send(f"Fermeture de {total} ticket(s) dans 5 secondes...")
+        await ctx.send("Salon supprimé dans 5 secondes...")
         await asyncio.sleep(5)
-
-        tickets_data = get_tickets(str(ctx.guild.id))
-        open_tickets = tickets_data.get("open", {})
-
-        for categorie_discord in categories_tickets:
-            for salon in categorie_discord.text_channels:
-                for membre_id, salon_id in list(open_tickets.items()):
-                    if int(salon_id) == salon.id:
-                        close_ticket(str(ctx.guild.id), membre_id)
-                await salon.delete()
-            await categorie_discord.delete()
-
-        await ctx.send("Tous les tickets ont été fermés.")
+        await ctx.channel.delete()
 
 async def setup(bot):
     await bot.add_cog(Tickets(bot))
