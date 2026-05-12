@@ -1,23 +1,20 @@
 import discord
 from discord.ext import commands
-
-class Musique(commands.Cog):  
-    def __init__(self, bot):
-        self.bot = bot
-
-async def setup(bot):
-    await bot.add_cog(Musique(bot))  
-
-    import discord
-from discord.ext import commands
 import yt_dlp
 import asyncio
+import os
 
-FFMPEG_PATH = r"C:\Users\Daniel\Desktop\Danny\armin.bot\app\ffmpeg-2026-04-01-git-eedf8f0165-full_build\ffmpeg-2026-04-01-git-eedf8f0165-full_build\bin\ffmpeg.exe"
+FFMPEG_PATH = "ffmpeg"
 
-YDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': 'True', 'quiet': True}
+YDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
+    'outtmpl': '/tmp/%(id)s.%(ext)s',
+}
+
 FFMPEG_OPTIONS = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
 
@@ -26,15 +23,35 @@ class Musique(commands.Cog):
         self.bot = bot
         self.queues = {}
 
-    def check_queue(self, ctx):
+    def after_play(self, ctx, filepath):
+        try:
+            os.remove(filepath)
+        except:
+            pass
         if ctx.guild.id in self.queues and self.queues[ctx.guild.id]:
-            next_source = self.queues[ctx.guild.id].pop(0)
-            source = discord.FFmpegOpusAudio(next_source['url'], executable=FFMPEG_PATH, **FFMPEG_OPTIONS)
-            ctx.voice_client.play(source, after=lambda e: self.check_queue(ctx))
+            next_data = self.queues[ctx.guild.id].pop(0)
+            source = discord.FFmpegOpusAudio(next_data['filepath'], executable=FFMPEG_PATH, **FFMPEG_OPTIONS)
+            ctx.voice_client.play(source, after=lambda e: self.after_play(ctx, next_data['filepath']))
             asyncio.run_coroutine_threadsafe(
-                ctx.send(f"🎶 Au tour de : **{next_source['title']}**"),
+                ctx.send(f"🎶 Au tour de : **{next_data['title']}**"),
                 self.bot.loop
             )
+
+    def download_audio(self, recherche: str):
+        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+            try:
+                info = ydl.extract_info(f"scsearch:{recherche}", download=True)['entries'][0]
+                filepath = ydl.prepare_filename(info)
+                return {'filepath': filepath, 'title': info['title']}
+            except Exception:
+                pass
+            try:
+                info = ydl.extract_info(f"ytsearch:{recherche}", download=True)['entries'][0]
+                filepath = ydl.prepare_filename(info)
+                return {'filepath': filepath, 'title': info['title']}
+            except Exception:
+                pass
+        return None
 
     @commands.command(extras={"category": "Musique"})
     async def play(self, ctx, *, recherche: str = None):
@@ -44,22 +61,20 @@ class Musique(commands.Cog):
             return await ctx.send("Tu dois être dans un salon vocal !")
         if ctx.voice_client is None:
             await ctx.author.voice.channel.connect()
-        async with ctx.typing():
-            with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-                try:
-                    info = ydl.extract_info(f"ytsearch:{recherche}", download=False)['entries'][0]
-                    data = {'url': info['url'], 'title': info['title']}
-                except Exception as e:
-                    return await ctx.send(f"Erreur de recherche : {e}")
+        msg = await ctx.send("🔍 Recherche en cours...")
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, self.download_audio, recherche)
+        if not data:
+            return await msg.edit(content="Aucun résultat trouvé.")
         if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
             if ctx.guild.id not in self.queues:
                 self.queues[ctx.guild.id] = []
             self.queues[ctx.guild.id].append(data)
-            await ctx.send(f"✅ Ajouté à la file : **{data['title']}**")
+            await msg.edit(content=f"✅ Ajouté à la file : **{data['title']}**")
         else:
-            source = await discord.FFmpegOpusAudio.from_probe(data['url'], executable=FFMPEG_PATH, **FFMPEG_OPTIONS)
-            ctx.voice_client.play(source, after=lambda e: self.check_queue(ctx))
-            await ctx.send(f"🎶 En train de jouer : **{data['title']}**")
+            source = discord.FFmpegOpusAudio(data['filepath'], executable=FFMPEG_PATH, **FFMPEG_OPTIONS)
+            ctx.voice_client.play(source, after=lambda e: self.after_play(ctx, data['filepath']))
+            await msg.edit(content=f"🎶 En train de jouer : **{data['title']}**")
 
     @commands.command(extras={"category": "Musique"})
     async def queue(self, ctx):
