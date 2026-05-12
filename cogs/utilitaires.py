@@ -1,15 +1,5 @@
 import discord
 from discord.ext import commands
-
-class Utilitaires(commands.Cog):  
-    def __init__(self, bot):
-        self.bot = bot
-
-async def setup(bot):
-    await bot.add_cog(Utilitaires(bot))  
-
-    import discord
-from discord.ext import commands
 import math
 import wikipedia
 import aiohttp
@@ -18,7 +8,17 @@ from openai import AsyncOpenAI
 import re
 import io
 
-OPENROUTER_KEY = "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"
+OPENROUTER_KEY = "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"
+
+MODELES_GRATUITS = [
+    "openrouter/free",
+    "deepseek/deepseek-r1:free",
+    "deepseek/deepseek-v3:free",
+    "qwen/qwen3-235b-a22b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+]
+
 UNSPLASH_KEY = "OayD9SavOGmQ9FF5qUAP5ynkjgjVgQnRRdIavCsy6co"
 
 ai_client = AsyncOpenAI(
@@ -26,9 +26,43 @@ ai_client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1"
 )
 
+async def ask_ai(question: str) -> str:
+    for modele in MODELES_GRATUITS:
+        try:
+            reponse = await ai_client.chat.completions.create(
+                model=modele,
+                messages=[{"role": "user", "content": question}]
+            )
+            texte = reponse.choices[0].message.content
+            if texte and texte.strip():
+                return texte
+        except Exception as e:
+            print(f"[AI] Modèle {modele} échoué : {e}")
+            continue
+    return "Tous les modèles sont temporairement indisponibles. Réessaie dans quelques minutes."
+
 class Utilitaires(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        if self.bot.user not in message.mentions:
+            return
+        question = message.content.replace(f"<@{self.bot.user.id}>", "").replace(f"<@!{self.bot.user.id}>", "").strip()
+        if not question:
+            await message.reply("Pose-moi une question !")
+            return
+        async with message.channel.typing():
+            texte = await ask_ai(question)
+            if len(texte) > 2000:
+                morceaux = [texte[i:i+2000] for i in range(0, len(texte), 2000)]
+                for morceau in morceaux:
+                    await message.reply(morceau)
+            else:
+                await message.reply(texte)
 
     @commands.command(extras={"category": "Utilitaires"})
     async def pic(self, ctx, membre: discord.Member = None):
@@ -76,27 +110,6 @@ class Utilitaires(commands.Cog):
             await ctx.send(resume)
         except:
             await ctx.send("Aucun résultat trouvé.")
-
-    @commands.command(extras={"category": "Utilitaires"})
-    async def ai(self, ctx, *, question: str = None):
-        if not question:
-            await ctx.send("Pose une question. Ex: `+ai c'est quoi Python ?`")
-            return
-        async with ctx.typing():
-            try:
-                reponse = await ai_client.chat.completions.create(
-                    model="google/gemma-3n-e4b-it:free",
-                    messages=[{"role": "user", "content": question}]
-                )
-                texte = reponse.choices[0].message.content
-                if len(texte) > 2000:
-                    morceaux = [texte[i:i+2000] for i in range(0, len(texte), 2000)]
-                    for morceau in morceaux:
-                        await ctx.send(morceau)
-                else:
-                    await ctx.send(texte)
-            except Exception as e:
-                await ctx.send(f"Erreur : {e}")
 
     @commands.command(extras={"category": "Utilitaires"})
     async def image(self, ctx, *, recherche: str = None):
